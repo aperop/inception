@@ -1,155 +1,165 @@
-version: '3.9'
-
+version: "3.9"
 
 services:
+## MySQL database ##
   mariadb:
     container_name: mariadb
-
-    build: ./requirements/mariadb
-
-    restart: always
-
-    env_file: .env
-
-    volumes:
-      - db:/var/lib/mysql
-
+    image: mariadb:${TITLE}
+    build:
+      context: requirements/mariadb/
+      args:
+      - DB_CLIENT=${DB_CLIENT}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_USER2=${MYSQL_USER2}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
     networks:
-      - project
-
-
+      - network
+    volumes:
+      - database:/var/lib/mysql
+    restart: always
+    
+## Website ##
   wordpress:
     container_name: wordpress
-
-    build: ./requirements/wordpress
-
-    env_file: .env
-
-    volumes:
-      - wp:/var/www/html/wordpress
-
+    image: wordpress:${TITLE}
+    build:
+      context: requirements/wordpress/
+      args:
+        - WORDPRESS_DB_NAME=${MYSQL_DATABASE}
+        - WORDPRESS_DB_USER=${MYSQL_USER}
+        - WORDPRESS_DB_PASSWORD=${MYSQL_PASSWORD}
+        - WORDPRESS_DB_HOST=${DB_HOST}
+        - DOMAIN_NAME=${DOMAIN_NAME}
     networks:
-      - project
-
+      - network
+    restart: always
     depends_on:
       - mariadb
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      - TITLE=${TITLE}
+      - WP_ADMIN_USER=${WP_ADMIN_USER}
+      - WP_ADMIN_PASSWORD=${WP_ADMIN_PASSWORD}
+      - WP_ADMIN_MAIL=${WP_ADMIN_MAIL}
+      - WP_USER=${WP_USER}
+      - WP_PASSWORD=${WP_PASSWORD}
+    volumes:
+      - website:/var/www/html
 
-
+## Server ##
   nginx:
     container_name: nginx
-
-    build: ./requirements/nginx
-
-    hostname: localhost
-
+    image: nginx:${TITLE}
+    build: requirements/nginx/
+    ports:
+      - "443:443"
     volumes:
-      - wp:/var/www/html/wordpress
-
-    networks:
-      - project
-
+      - website:/var/www/html
     depends_on:
       - wordpress
+    networks:
+      - network
+    restart: always
 
-    ports:
-      # - "8080:80" # http
-      - "443:443" # https
-
-
+## Redis ##
   redis:
-    build: requirements/bonus/redis
-
     container_name: redis
-
-    ports:
-      - "6379:6379"
-
+    image: redis:${TITLE}
+    build: requirements/redis/
+    depends_on:
+      - wordpress
     networks:
-      - project
-
+      - network
     restart: always
 
-
-  ftp-server:
-    build: requirements/bonus/ftp-server
-
-    container_name: ftp-server
-
+## Static website ##
+  static-website:
+    container_name: static-website
+    image: static-website:${TITLE}
+    build: requirements/static-website/
     ports:
-      - "21:21"
-      - "21100-21110:21100-21110"
-
-    volumes:
-      - wp:/var/www/html/wordpress
-
-    networks:
-     - project
-
+      - 1234:80
     restart: always
 
-    environment:
-      FTP_USR: ${FTP_USR}
-      FTP_PWD: ${FTP_PWD}
-
-
-  portainer:
-    image: portainer/portainer-ce:latest
-
-    container_name: portainer
-
-    ports:
-      - "8000:8000"
-      - "9443:9443"
-
-    volumes:
-      - "/etc/localtime:/etc/localtime:ro"
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-
-    security_opt:
-      - no-new-privileges:true
-
-    restart: always
-  
-
+## Adminer ##
   adminer:
-    image: adminer:4
-
     container_name: adminer
-
-    restart: unless-stopped
-
-    networks:
-      - project
-
+    image: adminer:${TITLE}
+    build: requirements/adminer/
+    environment:
+      - ADMINER_DEFAULT_SERVER=mariadb
     depends_on:
       - mariadb
-
     ports:
-      - "9000:8080"
+      - 8080:8080
+    restart: always
+    networks:
+      - network
 
+## FTP ##
+  ftp:
+    container_name: ftp
+    image: ftp:${TITLE}
+    depends_on:
+      - wordpress
+    build:
+      context: requirements/ftp/
+      args:
+      - FTP_USER=${WP_ADMIN_USER}
+    restart: always
+    ports:
+      - "20:20"
+      - "21:21"
+      - "21100-21110:21100-21110"
+    networks:
+      - network
+    volumes:
+      - website:/home/${WP_ADMIN_USER}/
+    environment:
+      - FTP_USER=${FTP_ADMIN_USER}
+      - FTP_PASS=${FTP_ADMIN_PASSWORD}
+      - PASV_ADDRESS=0.0.0.0
+      - PASV_MIN=21100
+      - PASV_MAX=21110
 
-volumes:
-  db:
-    name: db
+## Back-up tool ##
+  duplicator:
+    container_name: duplicator
+    build: requirements/duplicator/
+    image: duplicator:${TITLE}
+    networks:
+      - network
+    depends_on:
+      - mariadb
+    volumes:
+      - database:/db-data
+      - backup:/backup
+    restart: always
 
-    driver: local
-
-    driver_opts:
-      type: none
-      o: bind
-      device: /home/${USER}/data/db
-
-  wp:
-    name: wp
-
-    driver: local
-
-    driver_opts:
-      type: none
-      o: bind
-      device: /home/${USER}/data/wp
-
+############### NETWORKS ##################
 
 networks:
-  project:
-    driver: bridge
+  network:
+
+
+############### VOLUMES ##################
+
+volumes:
+  website:
+    driver_opts:
+      type: none
+      device: /home/dhawkgir/data/website
+      o: bind
+  database:
+    driver_opts:
+      type: none
+      device: /home/dhawkgir/data/database
+      o: bind
+  backup:
+    driver_opts:
+      type: none
+      device: /home/dhawkgir/data/backup
+      o: bind
