@@ -1,33 +1,36 @@
-**DOCKER**
+# INCEPTION
 
-docker images # shows images saved within docker
-docker ps # shows running dockers (flag -a for all dockers)
+Этот проект направлен на расширение знаний о системном администрировании с помощью Docker. Я виртуализировал несколько образов Docker, создав их на своей виртуальной машине.
 
-docker run -it DockerImage	#the -it flag launches a new terminal within the docker
-docker start # starts a stopped docker
-docker stop
-docker pause
-docker unpause
+Я настроил:
+* Контейнер Docker, содержащий nginx - сервер.
+* Контейнер Docker, содержащий WordPress + php-fpm без nginx.
+* Контейнер Docker, содержащий MariaDB без nginx.
+* Том, содержащий базу данных MariaDB.
+* Том, содержащий файлы WordPress.
+* Docker-сеть, которая устанавливает соединение между контейнерами.
 
-docker attach # re-enters a running docker
+Контейнеры перезапускаются в случае сбоя.
 
-docker rm # deletes a docker
-docker rmi # deletes a docker image
-
-docker volume create # create new unit of storage for new containers to plug into
-docker run -it DockerImage -v VolumeName:/var/docker_name -p 8080:8080
-				# the -v flag maps docker storage to a 'local' storage, allowing
-				# to save changes from a docker to a new one.
-				# the -p flag maps ports (local port:docker port)
-
-
-**DOCKER-COMPOSE**
-
-docker-compose config # checks validity of docker-compose.yml file
-docker-compose up -d # run all dockers, in detached mode (-d)
-docker-compose down # stop all dockers
-
-==== DOCKER IMAGES ====
-
-docker build -t ImageName:Tag "PATH OF THE DIRECTORY WITH THE DOCKERFILE" 
-				# build a docker image from a docker file
+```mermaid
+flowchart
+    subgraph  
+    w(("fa:fa-globe WWW"))<-.Port 443.->c3
+        subgraph Computer HOST
+            wp[("WordPress")]<.->c2
+            d1[(DataBase)]<..->c1
+            wp<.->c3
+            subgraph n[Docker network]
+                c1([Container MariaDB])
+                c2([Container WordPress+PHP])
+                c3([Container NGINX])
+                c1<-.Port 3306.->c2
+                c2<-.Port 9000.->c3
+            end
+        end
+    end
+    click c1 "https://github.com/aperop/inception/blob/master/srcs/requirements/mariadb/Dockerfile"
+    click c2 "https://github.com/aperop/inception/blob/master/srcs/requirements/wordpress/Dockerfile"
+    click c3 "https://github.com/aperop/inception/blob/master/srcs/requirements/nginx/Dockerfile"
+    
+```
